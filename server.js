@@ -14,13 +14,25 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, unlinkSyn
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { createHash } from "node:crypto";
 import express from "express";
 import { WebSocketServer } from "ws";
 
 // ── Config ──────────────────────────────────────────────────────────────
-const PORT = parseInt(process.env.WGPI_PORT || "4815", 10);
+const CWD = process.env.WGPI_CWD || process.cwd();
+
+// Derive a stable port from the CWD so each project gets its own port (4815–5814).
+// Can be overridden with WGPI_PORT env var.
+function cwdToPort(cwdPath) {
+  const BASE = 4815;
+  const RANGE = 1000;
+  const hash = createHash("sha256").update(cwdPath).digest();
+  const offset = ((hash[0] << 8) | hash[1]) % RANGE;
+  return BASE + offset;
+}
+
+const PORT = parseInt(process.env.WGPI_PORT || String(cwdToPort(CWD)), 10);
 const HOST = process.env.WGPI_HOST || "0.0.0.0";
-const CWD = process.env.WGPI_CWD || process.env.HOME;
 const PI_BIN = process.env.WGPI_PI_BIN || "pi";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
