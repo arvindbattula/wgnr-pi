@@ -162,7 +162,7 @@ app.get("/lib/purify.js", (_req, res) => res.sendFile(DOMPURIFY_PATH, { dotfiles
 
 app.get("/favicon.ico", (_req, res) => {
   res.setHeader("Content-Type", "image/svg+xml");
-  res.send(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><text y="24" font-size="24" fill="#6EA8DB">π</text></svg>`);
+  res.send(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><text y="24" font-size="24" fill="#2e7d8a">π</text></svg>`);
 });
 
 app.get("/manifest.json", (_req, res) => {
@@ -172,8 +172,8 @@ app.get("/manifest.json", (_req, res) => {
     short_name: "pi",
     start_url: "/",
     display: "standalone",
-    background_color: "#1a1a2e",
-    theme_color: "#6EA8DB",
+    background_color: "#f7f3ed",
+    theme_color: "#2e7d8a",
     icons: [{ src: "/favicon.ico", sizes: "any", type: "image/svg+xml" }],
   });
 });
