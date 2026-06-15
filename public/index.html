@@ -45,6 +45,12 @@
   #header-left { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
   #header h1 { font-size: 17px; font-weight: 700; display: flex; align-items: center; gap: 5px; }
   #header h1 .pi { color: var(--accent); font-family: "SF Mono","Fira Code",monospace; }
+  #project-label {
+    font-size: 12px; font-weight: 500; color: var(--text-dim);
+    background: var(--sidebar-bg); border: 1px solid var(--surface2);
+    border-radius: 10px; padding: 2px 9px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px;
+  }
   #status-dot {
     width: 8px; height: 8px; border-radius: 50%; background: #444;
     display: inline-block; transition: background .3s, box-shadow .3s;
@@ -423,6 +429,7 @@
         <text x="48" y="26" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif" font-size="20" font-weight="600" fill="#D4AF37">.ai</text>
       </svg>
     </h1>
+    <span id="project-label" title=""></span>
   </div>
 
   <div id="header-center">
@@ -550,6 +557,19 @@ function md(text) {
 function esc(s) {
   return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
 }
+
+// ── Project info ─────────────────────────────────────────────────────────
+async function loadProjectInfo() {
+  try {
+    const res = await fetch("/api/info");
+    const { folderName, gitRepo, cwd } = await res.json();
+    const label = gitRepo || folderName;
+    const el = document.getElementById("project-label");
+    if (el && label) { el.textContent = label; el.title = cwd; }
+    document.title = `π · ${label}`;
+  } catch { /* non-fatal */ }
+}
+loadProjectInfo();
 
 // ── DOM refs ──────────────────────────────────────────────────────────────
 const $ = s => document.querySelector(s);

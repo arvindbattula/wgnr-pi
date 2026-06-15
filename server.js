@@ -9,7 +9,7 @@
  *   PI_WEB_PORT=8080 PI_WEB_CWD=/path node server.js
  */
 
-import { spawn } from "node:child_process";
+import { spawn, execSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -180,6 +180,22 @@ app.get("/manifest.json", (_req, res) => {
 
 
 
+
+// ── Project info ────────────────────────────────────────────────────────────
+function getProjectInfo() {
+  const folderName = basename(CWD);
+  let gitRepo = null;
+  try {
+    const remote = execSync("git remote get-url origin", { cwd: CWD, stdio: ["pipe","pipe","pipe"], timeout: 2000 })
+      .toString().trim();
+    // Extract repo name: handles https://github.com/org/repo.git and git@github.com:org/repo.git
+    const parts = remote.replace(/\.git$/, "").split(/[\/:\\]/);
+    gitRepo = parts[parts.length - 1] || null;
+  } catch { /* not a git repo or no remote */ }
+  return { cwd: CWD, folderName, gitRepo };
+}
+
+app.get("/api/info", (_req, res) => res.json(getProjectInfo()));
 
 // Session list REST endpoint
 app.get("/api/sessions", (_req, res) => {
