@@ -181,6 +181,18 @@ app.get("/manifest.json", (_req, res) => {
 
 
 
+// ── Git branch ────────────────────────────────────────────────────────────
+let cachedBranch = null;
+function getBranchName() {
+  if (cachedBranch !== null) return cachedBranch;
+  try {
+    const branch = execSync("git branch --show-current", { cwd: CWD, stdio: ["pipe","pipe","pipe"], timeout: 2000 })
+      .toString().trim();
+    cachedBranch = branch || null;
+  } catch { cachedBranch = null; }
+  return cachedBranch;
+}
+
 // ── Project info ────────────────────────────────────────────────────────────
 function getProjectInfo() {
   const folderName = basename(CWD);
@@ -367,6 +379,7 @@ wss.on("connection", (ws) => {
       sessionId: currentSessionId,
       model: currentModel,
       thinkingLevel: currentThinkingLevel,
+      branch: getBranchName(),
     }));
   }
   console.log(`↔ client connected (${clients.size})`);
@@ -622,6 +635,7 @@ function handleRpcEvent(data) {
           sessionName: data.data.sessionName,
           model: currentModel,
           thinkingLevel: currentThinkingLevel,
+          branch: getBranchName(),
         });
       }
 
@@ -640,7 +654,7 @@ function handleRpcEvent(data) {
         broadcast({ type: "model_state", model: currentModel, thinkingLevel: currentThinkingLevel });
       }
       if (data.command === "get_session_stats" && data.success && data.data) {
-        broadcast({ type: "session_stats", stats: data.data });
+        broadcast({ type: "session_stats", stats: data.data, model: currentModel, branch: getBranchName() });
       }
       if (data.command === "get_available_models" && data.success && data.data?.models) {
         broadcast({ type: "available_models", models: data.data.models });
@@ -684,8 +698,12 @@ function handleRpcEvent(data) {
       break;
 
     case "turn_start":
+      broadcast(data);
+      break;
+
     case "turn_end":
       broadcast(data);
+      sendRpc("get_session_stats", {});
       break;
 
     case "tool_execution_start":
