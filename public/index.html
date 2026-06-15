@@ -326,10 +326,27 @@
   .msg-body a:hover { text-decoration: underline; }
   .msg-body img { max-width: 100%; border-radius: 6px; margin: 6px 0; }
 
-  .msg .tool-call { background: oklch(95% 0.01 80); border: 1px solid oklch(88% 0.025 80); padding: 8px 12px; margin: 6px 0; border-radius: 6px; font-size: var(--text-xs); color: var(--text-dim); }
+  .msg .tool-call { background: oklch(95% 0.01 80); border: 1px solid oklch(88% 0.025 80); padding: 0; margin: 6px 0; border-radius: 6px; font-size: var(--text-xs); color: var(--text-dim); overflow: hidden; }
   .msg .tool-call .tool-name { color: var(--accent2); font-weight: 600; }
-  .thinking { background: transparent !important; border: none !important; color: var(--text-dim); font-size: var(--text-xs); font-style: italic; padding: 4px 16px !important; max-width: var(--max-w); margin: 0 auto; }
+  .thinking { background: transparent !important; border: none !important; color: var(--text-dim); font-size: var(--text-xs); font-style: italic; max-width: var(--max-w); margin: 0 auto; padding: 0 !important; }
   .thinking .label { color: var(--text-muted); }
+
+  /* ── Collapsible intermediate blocks (thinking + tool calls) ── */
+  .collapsible > .collapse-head {
+    display: flex; align-items: center; gap: 6px; cursor: pointer;
+    user-select: none; padding: 6px 12px; font-weight: 600;
+  }
+  .thinking.collapsible > .collapse-head { padding: 4px 16px; font-style: normal; }
+  .collapsible > .collapse-head:hover { background: var(--surface2); }
+  .collapsible > .collapse-head .chevron {
+    display: inline-block; transition: transform .15s ease; opacity: .6; font-size: 10px;
+  }
+  .collapsible.collapsed > .collapse-head .chevron { transform: rotate(-90deg); }
+  .collapsible > .collapse-body {
+    padding: 0 12px 8px; white-space: pre-wrap; word-break: break-word;
+  }
+  .thinking.collapsible > .collapse-body { padding: 0 16px 6px; font-style: italic; }
+  .collapsible.collapsed > .collapse-body { display: none; }
 
   /* ── Status line ── */
   #status-line {
@@ -483,6 +500,7 @@
     <button id="btn-clear" title="Clear chat (Ctrl+L)">⌫</button>
     <button id="btn-help" title="Help (?)">?</button>
     <button id="btn-export" title="Export session">⤓</button>
+    <button id="btn-collapse" title="Expand intermediate output (Ctrl+T)">⋁</button>
     <button id="btn-abort" title="Stop (Escape)" disabled>⏹</button>
   </div>
 </div>
@@ -502,7 +520,7 @@
       <tr><td>Escape</td><td>Abort / Close</td></tr>
       <tr><td>⌃R</td><td>Restart Pi connection</td></tr>
       <tr><td>⌃L</td><td>Clear chat</td></tr>
-      <tr><td>⌃T</td><td>Toggle thinking</td></tr>
+      <tr><td>⌃T</td><td>Toggle intermediate</td></tr>
       <tr><td>/</td><td>Slash commands</td></tr>
       <tr><td>?</td><td>This help</td></tr>
     </table>
@@ -696,13 +714,31 @@ function ensureAssistantMsg() {
 function ensureThinking() {
   if (!currentThinkingEl) {
     currentThinkingEl = document.createElement("div");
-    currentThinkingEl.className = "msg thinking";
-    currentThinkingEl.innerHTML = `<div class="label">thinking…</div><div class="body"></div>`;
+    currentThinkingEl.className = "msg thinking collapsible collapsed";
+    currentThinkingEl.innerHTML =
+      `<div class="collapse-head"><span class="chevron">▾</span><span class="label">thinking…</span></div>` +
+      `<div class="collapse-body body"></div>`;
+    currentThinkingEl.querySelector(".collapse-head")
+      .addEventListener("click", () => currentThinkingEl.classList.toggle("collapsed"));
     msgs.appendChild(currentThinkingEl);
     scrollBottom();
   }
   return currentThinkingEl.querySelector(".body");
 }
+
+function makeToolCall(id) {
+  const tc = document.createElement("div");
+  tc.className = "tool-call collapsible collapsed";
+  if (id != null) tc.dataset.id = id;
+  tc.innerHTML =
+    `<div class="collapse-head"><span class="chevron">▾</span><span class="tool-head"></span></div>` +
+    `<div class="collapse-body"></div>`;
+  tc.querySelector(".collapse-head")
+    .addEventListener("click", () => tc.classList.toggle("collapsed"));
+  return tc;
+}
+function setToolHead(tc, html) { tc.querySelector(".tool-head").innerHTML = html; }
+function setToolBody(tc, html) { tc.querySelector(".collapse-body").innerHTML = html; }
 
 // ── Sidebar ───────────────────────────────────────────────────────────────
 function applySidebarState() {
@@ -1262,17 +1298,17 @@ function handleEvent(data) {
         const name = (data.message?.content||[]).find(c=>c.type==="toolCall")?.name || "…";
         if (!currentToolCalls[evt.toolCallId]) {
           const body = ensureAssistantMsg();
-          const tc = document.createElement("div");
-          tc.className = "tool-call"; tc.dataset.id = evt.toolCallId;
-          tc.innerHTML = `<span class="tool-name">${esc(name)}</span>`;
+          const tc = makeToolCall(evt.toolCallId);
+          setToolHead(tc, `<span class="tool-name">${esc(name)}</span>`);
           body.appendChild(tc); currentToolCalls[evt.toolCallId] = tc; scrollBottom();
         }
       } else if (evt.type === "toolcall_end") {
         const tc = currentToolCalls[evt.toolCallId];
         if (tc && evt.toolCall) {
           const args = evt.toolCall.arguments;
-          const preview = typeof args === "string" ? args.slice(0,200) : JSON.stringify(args).slice(0,200);
-          tc.innerHTML = `<span class="tool-name">${esc(evt.toolCall.name)}</span> ${esc(preview)}`;
+          const argStr = typeof args === "string" ? args : JSON.stringify(args, null, 2);
+          setToolHead(tc, `<span class="tool-name">${esc(evt.toolCall.name)}</span>`);
+          setToolBody(tc, esc(argStr));
         }
       }
       break;
@@ -1284,9 +1320,10 @@ function handleEvent(data) {
 
     case "tool_execution_start": {
       const body = ensureAssistantMsg();
-      const te = document.createElement("div"); te.className = "tool-call";
-      te.innerHTML = `<span class="tool-name">⚙ ${esc(data.toolName)}</span> running…`;
-      body.appendChild(te); currentToolCalls[data.toolCallId] = te; scrollBottom();
+      let te = currentToolCalls[data.toolCallId];
+      if (!te) { te = makeToolCall(data.toolCallId); body.appendChild(te); currentToolCalls[data.toolCallId] = te; }
+      setToolHead(te, `<span class="tool-name">⚙ ${esc(data.toolName)}</span> <span style="color:var(--text-muted)">running…</span>`);
+      scrollBottom();
       break;
     }
 
@@ -1294,7 +1331,8 @@ function handleEvent(data) {
       const te = currentToolCalls[data.toolCallId];
       if (te) {
         const result = data.result?.content?.[0]?.text || "done";
-        te.innerHTML = `<span class="tool-name">⚙ ${esc(data.toolName)}</span> <span style="color:var(--text-muted)">${esc(result.slice(0,300))}</span>`;
+        setToolHead(te, `<span class="tool-name">⚙ ${esc(data.toolName)}</span>`);
+        setToolBody(te, esc(result));
       }
       break;
     }
@@ -1405,9 +1443,16 @@ async function loadArchivedSessions() {
 }
 
 // ── Toggle helpers ────────────────────────────────────────────────────────
-function toggleThinking() {
+function toggleIntermediate() {
+  // thinkingHidden=true means "all expanded"; toggle expands/collapses every block.
   thinkingHidden = !thinkingHidden;
-  document.querySelectorAll(".msg.thinking").forEach(el => { el.style.display = thinkingHidden ? "none" : ""; });
+  const btn = document.getElementById("btn-collapse");
+  const blocks = msgs.querySelectorAll(".collapsible");
+  blocks.forEach(b => b.classList.toggle("collapsed", !thinkingHidden));
+  if (btn) {
+    btn.textContent = thinkingHidden ? "⋀" : "⋁";
+    btn.title = thinkingHidden ? "Collapse intermediate output (Ctrl+T)" : "Expand intermediate output (Ctrl+T)";
+  }
 }
 
 // ── Pi health helpers ──────────────────────────────────────────────────────
@@ -1485,6 +1530,7 @@ $("#btn-new-chat").addEventListener("click", () => {
 });
 
 $("#btn-sidebar-toggle").addEventListener("click", toggleSidebar);
+$("#btn-collapse").addEventListener("click", toggleIntermediate);
 sidebarOverlay.addEventListener("click", () => { sidebarOpen = false; applySidebarState(); });
 
 $("#btn-help").addEventListener("click", () => document.getElementById("help-modal").classList.add("open"));
@@ -1510,7 +1556,7 @@ document.addEventListener("keydown", e => {
   }
   if (document.activeElement === input) return;
   if (e.key === "n" && e.ctrlKey) { e.preventDefault(); if (ws?.readyState===1) { ws.send(JSON.stringify({type:"new_session"})); } }
-  if (e.key === "t" && e.ctrlKey) { e.preventDefault(); toggleThinking(); }
+  if (e.key === "t" && e.ctrlKey) { e.preventDefault(); toggleIntermediate(); }
   if (e.key === "l" && e.ctrlKey) { e.preventDefault(); document.getElementById("btn-clear").click(); }
   if (e.key === "?" && !e.ctrlKey && !e.altKey && document.activeElement.tagName !== 'TEXTAREA' && document.activeElement.tagName !== 'INPUT') document.getElementById("help-modal").classList.add("open");
 });
